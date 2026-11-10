@@ -1,0 +1,42 @@
+# Builds RAW Recipes and attaches a .dmg and a .zip to a draft GitHub release.
+# Trigger: push a tag like v0.1.0  →  git tag v0.1.0 && git push origin v0.1.0
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and package
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="0.0.0-dev.$GITHUB_RUN_NUMBER"
+          fi
+          VERSION="$VERSION" BUILD_NUMBER="$GITHUB_RUN_NUMBER" ./build-app.sh --package
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: RAW-Recipes-macOS
+          path: dist/*
+
+      - name: Create draft release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --draft \
+            --title "RAW Recipes $GITHUB_REF_NAME" \
+            --generate-notes

@@ -1,0 +1,15 @@
+# Checks that the app builds on every push and pull request.
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: swift build -c release
