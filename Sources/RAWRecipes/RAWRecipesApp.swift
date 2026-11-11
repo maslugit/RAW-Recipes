@@ -35,6 +35,8 @@ struct RAWRecipesApp: App {
                 .environmentObject(camera)
                 .frame(minWidth: 960, minHeight: 720)
         }
+        // No system title bar – the app draws its own title stack with traffic lights.
+        .windowStyle(.hiddenTitleBar)
         .commands {
             SelectionCommands()
             CommandMenu("Camera") {

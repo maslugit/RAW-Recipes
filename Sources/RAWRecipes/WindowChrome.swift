@@ -19,18 +19,28 @@ final class WindowRef: ObservableObject {
                 self?.isKey = window?.isKeyWindow ?? false
             })
         }
-        // AppKit may show the standard buttons again after full screen or resizing.
-        for name in [NSWindow.didExitFullScreenNotification, NSWindow.didResizeNotification] {
+        // SwiftUI and AppKit can restore the system title bar (and its buttons) when the window
+        // becomes active, is resized or leaves full screen – so the chrome is re-applied then.
+        for name in [NSWindow.didBecomeKeyNotification, NSWindow.didBecomeMainNotification,
+                     NSWindow.didExitFullScreenNotification, NSWindow.didResizeNotification] {
             observers.append(nc.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
-                self?.hideStandardButtons()
+                self?.applyChrome()
             })
         }
         isKey = window.isKeyWindow
-        hideStandardButtons()
+        applyChrome()
     }
 
-    func hideStandardButtons() {
+    /// Transparent, empty title bar and no system traffic lights – we draw our own in the title stack.
+    func applyChrome() {
         guard let window else { return }
+        window.styleMask.insert(.fullSizeContentView)
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.titlebarSeparatorStyle = .none
+        if window.toolbar != nil { window.toolbar = nil }
+        window.backgroundColor = Theme.nsBackground
+        window.appearance = NSAppearance(named: .darkAqua)
         for type in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
             window.standardWindowButton(type)?.isHidden = true
         }
@@ -64,14 +74,6 @@ struct WindowConfigurator: NSViewRepresentable {
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             guard let window else { return }
-
-            window.styleMask.insert(.fullSizeContentView)
-            window.titlebarAppearsTransparent = true
-            window.titleVisibility = .hidden
-            window.titlebarSeparatorStyle = .none
-            window.toolbar = nil
-            window.backgroundColor = Theme.nsBackground
-            window.appearance = NSAppearance(named: .darkAqua)
 
             DispatchQueue.main.async { [ref, weak window] in
                 if let window { ref.attach(window) }
