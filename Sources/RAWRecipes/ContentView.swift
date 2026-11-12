@@ -390,10 +390,10 @@ struct Filmstrip: View {
                                 shot: shot,
                                 isSelected: selection.contains(shot.id),
                                 isFocused: focusedID == shot.id,
+                                focus: { focusedID = shot.id },
                                 toggle: { toggle(shot.id) }
                             )
                             .id(shot.id)
-                            .onTapGesture { focusedID = shot.id }
                             .onAppear { camera.loadThumbnail(for: shot) }
                         }
                     }
@@ -415,6 +415,7 @@ struct ShotCell: View {
     @ObservedObject var shot: Shot
     let isSelected: Bool
     let isFocused: Bool
+    let focus: () -> Void
     let toggle: () -> Void
 
     private let width: CGFloat = 164
@@ -424,33 +425,40 @@ struct ShotCell: View {
     static let totalHeight: CGFloat = 109 + labelSpacing + labelHeight
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Self.labelSpacing) {
-            ZStack(alignment: .topTrailing) {
-                ZStack {
-                    Color.black
-                    if let thumb = shot.thumbnail {
-                        Image(decorative: thumb, scale: 1)
-                            .resizable()
-                            .scaledToFit()
-                    } else {
-                        ProgressView().controlSize(.small)
-                    }
-                }
-                .frame(width: width, height: height)
-                .clipShape(RoundedRectangle(cornerRadius: Theme.thumbCorner, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: Theme.thumbCorner, style: .continuous)
-                        .strokeBorder(isFocused ? Theme.text : Color.clear, lineWidth: 2)
-                )
-
-                Button(action: toggle) {
-                    GreenCheckbox(isOn: isSelected, color: .white, checkColor: .white, size: 18, filled: false)
-                        .padding(6)
-                        .contentShape(Rectangle())
-                }
+        // Two separate buttons (not nested): the cell shows the photo, the checkbox selects it.
+        ZStack(alignment: .topTrailing) {
+            Button(action: focus) { cellContent }
                 .buttonStyle(.plain)
-                .help(isSelected ? "Deselect" : "Select for import")
+                .help("Show \(shot.displayName)")
+
+            Button(action: toggle) {
+                GreenCheckbox(isOn: isSelected, color: .white, checkColor: .white, size: 18, filled: false)
+                    .padding(6)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .help(isSelected ? "Deselect" : "Select for import")
+        }
+    }
+
+    private var cellContent: some View {
+        VStack(alignment: .leading, spacing: Self.labelSpacing) {
+            ZStack {
+                Color.black
+                if let thumb = shot.thumbnail {
+                    Image(decorative: thumb, scale: 1)
+                        .resizable()
+                        .scaledToFit()
+                } else {
+                    ProgressView().controlSize(.small)
+                }
+            }
+            .frame(width: width, height: height)
+            .clipShape(RoundedRectangle(cornerRadius: Theme.thumbCorner, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.thumbCorner, style: .continuous)
+                    .strokeBorder(isFocused ? Theme.text : Color.clear, lineWidth: 2)
+            )
 
             HStack(spacing: 4) {
                 Text(shot.displayName)
@@ -563,6 +571,10 @@ struct DetailView: View {
                         .interpolation(zoom >= 1 ? .none : .high)
                         .frame(width: size.width, height: size.height)
                         .offset(fixedZoom == nil ? .zero : pan)
+                        // clipped() only clips the drawing, not hit-testing: a zoomed-in image
+                        // would otherwise catch clicks on the filmstrip below it.
+                        // Mouse and trackpad input is handled by ZoomInputView instead.
+                        .allowsHitTesting(false)
                 )
                 .clipped()
                 .overlay(alignment: .topTrailing) {

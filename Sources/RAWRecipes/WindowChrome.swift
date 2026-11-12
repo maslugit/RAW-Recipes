@@ -32,17 +32,19 @@ final class WindowRef: ObservableObject {
     }
 
     /// Transparent, empty title bar and no system traffic lights – we draw our own in the title stack.
+    /// Only touches what has actually changed, so re-applying it (on every resize or
+    /// activation) never triggers another layout pass of its own.
     func applyChrome() {
         guard let window else { return }
-        window.styleMask.insert(.fullSizeContentView)
-        window.titlebarAppearsTransparent = true
-        window.titleVisibility = .hidden
-        window.titlebarSeparatorStyle = .none
+        if !window.styleMask.contains(.fullSizeContentView) { window.styleMask.insert(.fullSizeContentView) }
+        if !window.titlebarAppearsTransparent { window.titlebarAppearsTransparent = true }
+        if window.titleVisibility != .hidden { window.titleVisibility = .hidden }
+        if window.titlebarSeparatorStyle != .none { window.titlebarSeparatorStyle = .none }
         if window.toolbar != nil { window.toolbar = nil }
-        window.backgroundColor = Theme.nsBackground
-        window.appearance = NSAppearance(named: .darkAqua)
+        if window.backgroundColor != Theme.nsBackground { window.backgroundColor = Theme.nsBackground }
+        if window.appearance?.name != .darkAqua { window.appearance = NSAppearance(named: .darkAqua) }
         for type in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
-            window.standardWindowButton(type)?.isHidden = true
+            if let button = window.standardWindowButton(type), !button.isHidden { button.isHidden = true }
         }
     }
 
