@@ -40,7 +40,12 @@ struct ContentView: View {
     @EnvironmentObject private var camera: CameraService
     @StateObject private var windowRef = WindowRef()
     @State private var selection = Set<String>()
+    /// The photo shown in the preview (the one clicked last).
     @State private var focusedID: String?
+    /// Photos highlighted in the filmstrip (click, ⇧-click for a range, ⌘-click to add or remove).
+    @State private var highlighted = Set<String>()
+    /// Where a ⇧-click range starts.
+    @State private var anchorID: String?
     @AppStorage("importFolderPath") private var importFolderPath = ""
     @AppStorage("writeXMP") private var writeXMP = true
     @AppStorage("writeRRData") private var writeRRData = false
@@ -73,7 +78,8 @@ struct ContentView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .panel()
 
-                    Filmstrip(selection: $selection, focusedID: $focusedID)
+                    Filmstrip(selection: $selection, focusedID: $focusedID,
+                              highlighted: highlighted, onClick: click)
                         .frame(height: Filmstrip.height)
                         .panel()
                 }
@@ -91,6 +97,14 @@ struct ContentView: View {
         .font(Theme.font(17))
         .preferredColorScheme(.dark)
         .focusedSceneValue(\.selectionActions, SelectionActions(selectAll: selectAll, selectNone: selectNone))
+        .background(
+            // Space checks or unchecks the highlighted photos for import.
+            Button("", action: toggleChecksForHighlighted)
+                .keyboardShortcut(.space, modifiers: [])
+                .opacity(0)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        )
         .onAppear { focusFirstIfNeeded(camera.shots.map(\.id)) }
         .onChange(of: camera.shots.map(\.id)) { ids in focusFirstIfNeeded(ids) }
     }
@@ -266,8 +280,53 @@ struct ContentView: View {
     private func selectNone() { selection.removeAll() }
 
     private func focusFirstIfNeeded(_ ids: [String]) {
+        highlighted.formIntersection(ids)
         if let id = focusedID, ids.contains(id) { return }
         focusedID = ids.first
+        anchorID = ids.first
+        highlighted = Set(ids.prefix(1))
+    }
+
+    // MARK: Filmstrip selection
+
+    /// Click: show and highlight one photo. ⇧-click: highlight the range from the last click.
+    /// ⌘-click: add or remove a single photo (⇧⌘-click adds a range).
+    private func click(_ id: String) {
+        let flags = NSEvent.modifierFlags
+        let ids = camera.shots.map(\.id)
+
+        if flags.contains(.shift),
+           let anchor = anchorID,
+           let a = ids.firstIndex(of: anchor),
+           let b = ids.firstIndex(of: id) {
+            let range = Set(ids[min(a, b)...max(a, b)])
+            if flags.contains(.command) { highlighted.formUnion(range) } else { highlighted = range }
+            focusedID = id
+        } else if flags.contains(.command) {
+            if highlighted.contains(id) {
+                highlighted.remove(id)
+                if focusedID == id, let next = ids.first(where: highlighted.contains) { focusedID = next }
+            } else {
+                highlighted.insert(id)
+                focusedID = id
+            }
+            anchorID = id
+        } else {
+            highlighted = [id]
+            focusedID = id
+            anchorID = id
+        }
+    }
+
+    /// Checks all highlighted photos for import, or unchecks them if they are all checked already.
+    private func toggleChecksForHighlighted() {
+        let targets = highlighted.isEmpty ? Set([focusedID].compactMap { $0 }) : highlighted
+        guard !targets.isEmpty else { return }
+        if targets.isSubset(of: selection) {
+            selection.subtract(targets)
+        } else {
+            selection.formUnion(targets)
+        }
     }
 
     // MARK: Folder and import
@@ -370,6 +429,8 @@ struct Filmstrip: View {
     @EnvironmentObject private var camera: CameraService
     @Binding var selection: Set<String>
     @Binding var focusedID: String?
+    let highlighted: Set<String>
+    let onClick: (String) -> Void
 
     /// The same spacing on all sides around the thumbnails.
     static let inset: CGFloat = 14
@@ -389,8 +450,8 @@ struct Filmstrip: View {
                             ShotCell(
                                 shot: shot,
                                 isSelected: selection.contains(shot.id),
-                                isFocused: focusedID == shot.id,
-                                focus: { focusedID = shot.id },
+                                isFocused: highlighted.contains(shot.id),
+                                focus: { onClick(shot.id) },
                                 toggle: { toggle(shot.id) }
                             )
                             .id(shot.id)
