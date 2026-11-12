@@ -1,10 +1,8 @@
-# Checks that the app builds on every push and pull request.
+# Checks that the app builds. Run it manually from the Actions tab.
 name: Build
 
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   build:

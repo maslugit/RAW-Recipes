@@ -479,8 +479,19 @@ struct ShotCell: View {
     let focus: () -> Void
     let toggle: () -> Void
 
-    private let width: CGFloat = 164
     private let height: CGFloat = 109
+    /// Follows the photo: wide for landscape, narrow for portrait.
+    private var width: CGFloat { (height * aspectRatio).rounded() }
+
+    /// Width / height of the photo, taken from its thumbnail only.
+    /// The thumbnail is decoded with its rotation applied, so portrait photos come out tall.
+    /// Using only the thumbnail keeps the filmstrip stable: nothing is re-measured when a
+    /// photo is selected, and no size has to be asked from the camera for every cell.
+    private var aspectRatio: CGFloat {
+        if let aspect = shot.displayAspect { return aspect }
+        guard let thumb = shot.thumbnail, thumb.width > 0, thumb.height > 0 else { return 3 / 2 }
+        return CGFloat(thumb.width) / CGFloat(thumb.height)
+    }
     private static let labelHeight: CGFloat = 19
     private static let labelSpacing: CGFloat = 5
     static let totalHeight: CGFloat = 109 + labelSpacing + labelHeight
@@ -504,38 +515,100 @@ struct ShotCell: View {
 
     private var cellContent: some View {
         VStack(alignment: .leading, spacing: Self.labelSpacing) {
-            ZStack {
-                Color.black
-                if let thumb = shot.thumbnail {
-                    Image(decorative: thumb, scale: 1)
-                        .resizable()
-                        .scaledToFit()
-                } else {
-                    ProgressView().controlSize(.small)
-                }
+            // The whole card – photo, rounded corners and selection stroke – turns when the
+            // thumbnail gets its correct orientation. While turning, the card is laid out
+            // sideways (width and height swapped) so that after 90° it fits the cell exactly.
+            let turned = shot.thumbnailRotation != 0
+            card
+                .frame(width: turned ? height : width, height: turned ? width : height)
+                .clipShape(RoundedRectangle(cornerRadius: Theme.thumbCorner, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: Theme.thumbCorner, style: .continuous)
+                        .strokeBorder(isFocused ? Theme.text : Color.clear, lineWidth: 2)
+                )
+                .rotationEffect(.degrees(shot.thumbnailRotation))
+                .frame(width: width, height: height)
+            .overlay(alignment: .bottomTrailing) {
+                FileTypeTag(shot: shot)
+                    .padding(6)
             }
-            .frame(width: width, height: height)
-            .clipShape(RoundedRectangle(cornerRadius: Theme.thumbCorner, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.thumbCorner, style: .continuous)
-                    .strokeBorder(isFocused ? Theme.text : Color.clear, lineWidth: 2)
-            )
 
-            HStack(spacing: 4) {
-                Text(shot.displayName)
-                    .font(.system(size: 14))
-                    .foregroundStyle(isFocused ? Theme.text : Theme.secondaryText)
-                Spacer(minLength: 0)
-                Text(shot.kindLabel)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.tertiaryText)
-            }
+            // The file type is shown as a tag on the thumbnail, so the name always fits.
+            fileName
+                .frame(maxWidth: .infinity, alignment: .leading)
             // SF Mono: sans-serif, fixed width.
             .fontDesign(.monospaced)
             .lineLimit(1)
             .frame(width: width, height: Self.labelHeight)
         }
         .contentShape(Rectangle())
+    }
+
+    /// The photo itself. The black bars the camera adds are trimmed when the thumbnail loads;
+    /// when the sharper preview replaces it, the new image fades in.
+    private var card: some View {
+        ZStack {
+            Color.black
+            if let thumb = shot.thumbnail {
+                Image(decorative: thumb, scale: 1)
+                    .resizable()
+                    .scaledToFill()
+                    .id(ObjectIdentifier(thumb))
+                    .transition(.opacity)
+            } else {
+                ProgressView().controlSize(.small)
+            }
+        }
+    }
+
+    private var fileName: some View {
+        Text(shot.displayName)
+            .font(.system(size: 14))
+            .foregroundStyle(isFocused ? Theme.text : Theme.secondaryText)
+    }
+}
+
+// MARK: - File type tag
+
+/// Tiny file-type tag in the corner of a thumbnail. RAW + JPEG shows two stacked tags:
+/// RAW on top, JPG peeking out below and to the right.
+struct FileTypeTag: View {
+    @ObservedObject var shot: Shot
+
+    private let stackOffset: CGFloat = 3
+    /// Solid dark gray with a thin light gray stroke – the same for both tags in a stack.
+    private let fill = Color(white: 0.16)
+    private let stroke = Color(white: 0.45)
+
+    var body: some View {
+        if shot.raw != nil && shot.jpeg != nil {
+            ZStack(alignment: .topLeading) {
+                tag("JPG", showsText: false)
+                    .offset(x: stackOffset, y: stackOffset)
+                tag("RAW")
+            }
+            // The offset does not take up layout space, so keep the stack inside the corner.
+            .padding([.trailing, .bottom], stackOffset)
+            .help("RAW + JPEG")
+        } else if shot.raw != nil {
+            tag("RAW").help("RAW")
+        } else if shot.jpeg != nil {
+            tag("JPG").help("JPEG")
+        } else {
+            tag(shot.kindLabel)
+        }
+    }
+
+    private func tag(_ text: String, showsText: Bool = true) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 3, style: .continuous)
+        return Text(text)
+            .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
+            .tracking(0.6)
+            .foregroundStyle(showsText ? Color.white : Color.clear)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 2)
+            .background(shape.fill(fill))
+            .overlay(shape.strokeBorder(stroke, lineWidth: 0.75))
     }
 }
 
@@ -735,15 +808,19 @@ struct DetailView: View {
                       height: min(max(p.height, -maxY), maxY))
     }
 
-    /// Mouse wheel and two-finger swipe up/down on the trackpad zoom around the cursor.
-    /// Up (away from you) zooms in, regardless of the natural scrolling setting.
+    /// Mouse wheel and two-finger swipe on the trackpad zoom around the cursor,
+    /// regardless of the natural scrolling setting:
+    /// - Trackpad: swipe down (towards you) zooms in, swipe up zooms out.
+    /// - Mouse wheel: roll away from you zooms in, towards you zooms out.
     /// The image is moved by clicking and dragging.
     private func handleScroll(_ e: ScrollInput) {
         guard e.deltaY != 0 else { return }
-        var dy = e.deltaY
-        if e.isInverted { dy = -dy }
+        // Positive = the wheel or fingers moved away from you (up).
+        var awayFromYou = e.deltaY
+        if e.isInverted { awayFromYou = -awayFromYou }
+        let zoomIn = e.isPrecise ? -awayFromYou : awayFromYou
         let step = e.isPrecise ? 0.01 : 0.12
-        setZoom(zoom * exp(Double(dy) * step), around: e.location)
+        setZoom(zoom * exp(Double(zoomIn) * step), around: e.location)
     }
 
     /// Loads the original when the preview is not enough for the current zoom.

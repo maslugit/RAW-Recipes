@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import SwiftUI
 import ImageCaptureCore
 
 @MainActor
@@ -74,7 +75,9 @@ final class CameraService: NSObject, ObservableObject {
         guard shot.thumbnail == nil, let file = shot.primary else { return }
         Task {
             if let data = try? await file.thumbnailData(maxPixelSize: 320) {
-                shot.thumbnail = ImageDecoding.cgImage(from: data, maxPixelSize: 320)
+                if let image = ImageDecoding.cgImage(from: data, maxPixelSize: 320) {
+                    shot.thumbnail = ImageDecoding.trimLetterbox(image)
+                }
             }
         }
     }
@@ -94,11 +97,50 @@ final class CameraService: NSObject, ObservableObject {
                 return
             }
             shot.settings = FujiMakerNotes.parse(jpegData: jpegData)
-            shot.preview = await Task.detached(priority: .userInitiated) {
+            let preview = await Task.detached(priority: .userInitiated) {
                 ImageDecoding.cgImage(from: jpegData, maxPixelSize: 3000)
             }.value
+            shot.preview = preview
+
+            // The preview is always correctly rotated and sharper than the camera's thumbnail,
+            // so it replaces the filmstrip thumbnail.
+            if let preview, let small = ImageDecoding.downscaled(preview, maxPixelSize: 360) {
+                await replaceThumbnail(of: shot, with: small,
+                                       orientation: ImageDecoding.orientation(of: jpegData))
+            }
         } catch {
             status = "Preview failed: \(error.localizedDescription)"
+        }
+    }
+
+    /// Swaps in a better thumbnail. If the old one had the wrong orientation (landscape instead
+    /// of portrait or the other way round), it first turns 90° in the direction the EXIF
+    /// orientation says, while the cell resizes; then the sharp image takes its place.
+    /// Otherwise the new image simply fades in.
+    private func replaceThumbnail(of shot: Shot, with image: CGImage, orientation: Int) async {
+        let newAspect = CGFloat(image.width) / CGFloat(image.height)
+        let duration = 0.45
+
+        if let old = shot.thumbnail, (old.height > old.width) != (image.height > image.width) {
+            let angle: Double = orientation == 8 ? -90 : 90
+            withAnimation(.easeInOut(duration: duration)) {
+                shot.thumbnailRotation = angle
+                shot.displayAspect = newAspect
+            }
+            try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
+
+            // Now the old image shows the same orientation as the new one – swap without a fade.
+            var instant = Transaction()
+            instant.disablesAnimations = true
+            withTransaction(instant) {
+                shot.thumbnail = image
+                shot.thumbnailRotation = 0
+            }
+        } else {
+            withAnimation(.easeInOut(duration: duration)) {
+                shot.thumbnail = image
+                shot.displayAspect = newAspect
+            }
         }
     }
 

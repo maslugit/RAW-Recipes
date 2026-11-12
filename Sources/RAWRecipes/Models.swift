@@ -48,6 +48,10 @@ final class Shot: ObservableObject, Identifiable {
     private(set) var others: [ICCameraFile] = []
 
     @Published var thumbnail: CGImage?
+    /// Rotation (degrees) applied to the thumbnail while it turns to its correct orientation.
+    @Published var thumbnailRotation: Double = 0
+    /// Width / height once the correctly rotated preview is known. Overrides the thumbnail's.
+    @Published var displayAspect: CGFloat?
     @Published var preview: CGImage?
     @Published var fullImage: CGImage?
     @Published var settings: FujiSettings?
