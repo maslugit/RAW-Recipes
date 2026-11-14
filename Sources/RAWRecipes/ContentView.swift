@@ -46,6 +46,9 @@ struct ContentView: View {
     @State private var highlighted = Set<String>()
     /// Where a ⇧-click range starts.
     @State private var anchorID: String?
+    @State private var hoverImportHeader = false
+    @State private var hoverFolder = false
+    @State private var hoverImport = false
     @AppStorage("importFolderPath") private var importFolderPath = ""
     @AppStorage("writeXMP") private var writeXMP = true
     @AppStorage("writeRRData") private var writeRRData = false
@@ -94,7 +97,7 @@ struct ContentView: View {
         .background(Theme.background.ignoresSafeArea())
         .background(WindowConfigurator(ref: windowRef))
         .foregroundStyle(Theme.text)
-        .font(Theme.font(17))
+        .font(Theme.font(18))
         .preferredColorScheme(.dark)
         .focusedSceneValue(\.selectionActions, SelectionActions(selectAll: selectAll, selectNone: selectNone))
         .background(
@@ -159,7 +162,7 @@ struct ContentView: View {
         HStack(alignment: .center, spacing: 8) {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Import Options")
-                    .font(Theme.font(17, bold: true))
+                    .font(Theme.font(18, bold: true))
                     .foregroundStyle(Theme.text)
 
                 Text(saveLabel)
@@ -169,8 +172,8 @@ struct ContentView: View {
 
                 // The folder on its own row
                 Button(action: chooseFolder) {
-                    HStack(spacing: 5) {
-                        Image(systemName: "folder")
+                    HStack(alignment: .firstTextBaseline, spacing: 5) {
+                        AppIcon(kind: .folder, hovered: hoverFolder, textSize: 15)
                         if !importFolderPath.isEmpty {
                             Text((importFolderPath as NSString).abbreviatingWithTildeInPath)
                                 .lineLimit(1)
@@ -182,23 +185,26 @@ struct ContentView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .onHover { hoverFolder = $0 }
                 .help(importFolderPath.isEmpty ? "Choose a folder to import to" : "Change folder (\(importFolderPath))")
             }
 
             Spacer(minLength: 8)
 
-            Image(systemName: "chevron.right")
-                .font(.system(size: 13, weight: .semibold))
+            AppIcon(kind: .chevron, hovered: hoverImportHeader, expanded: showImportOptions)
                 .foregroundStyle(Theme.tertiaryText)
-                .rotationEffect(.degrees(showImportOptions ? 90 : 0))
-                .animation(.easeInOut(duration: 0.25), value: showImportOptions)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
         .contentShape(Rectangle())
+        .onHover { hoverImportHeader = $0 }
         .onTapGesture {
             showImportOptions.toggle()
         }
+    }
+
+    private var canImport: Bool {
+        !selection.isEmpty && !importFolderPath.isEmpty && !camera.isBusy
     }
 
     /// "Save Lightroom, RapidRAW to" – depending on which sidecars are selected.
@@ -239,23 +245,25 @@ struct ContentView: View {
     private var importActions: some View {
         VStack(spacing: 12) {
             Text("\(selection.count) of \(camera.shots.count) selected")
-                .font(Theme.font(17))
+                .font(Theme.font(18))
                 .foregroundStyle(Theme.secondaryText)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             Button(action: startImport) {
-                HStack(spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
                     if camera.isBusy {
                         ProgressView().controlSize(.small)
+                            .alignmentGuide(.firstTextBaseline) { d in d[VerticalAlignment.center] + 6 }
                     } else {
-                        Image(systemName: "square.and.arrow.down")
+                        AppIcon(kind: .importArrow, hovered: hoverImport && canImport)
                     }
                     Text(camera.isBusy ? "Importing…" : "Import \(selection.count)")
                 }
                 .frame(maxWidth: .infinity)
             }
             .buttonStyle(DarkButtonStyle())
-            .disabled(selection.isEmpty || importFolderPath.isEmpty || camera.isBusy)
+            .disabled(!canImport)
+            .onHover { hoverImport = $0 }
             .keyboardShortcut("i", modifiers: .command)
             .help(importFolderPath.isEmpty ? "Choose a folder under Import Options first" : "Import selected photos (⌘I)")
         }
@@ -408,7 +416,7 @@ struct ShotSettingsSection: View {
                                 .foregroundStyle(Theme.tertiaryText)
                             Spacer(minLength: 8)
                             Text(row.value)
-                                .font(Theme.font(17))
+                                .font(Theme.font(18))
                                 .foregroundStyle(Theme.text)
                                 .multilineTextAlignment(.trailing)
                         }
@@ -439,7 +447,7 @@ struct Filmstrip: View {
     var body: some View {
         if camera.shots.isEmpty {
             Text(camera.camera == nil ? "No camera connected" : "No photos on the card")
-                .font(Theme.font(17))
+                .font(Theme.font(18))
                 .foregroundStyle(Theme.tertiaryText)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {

@@ -94,7 +94,7 @@ struct DarkButtonStyle: ButtonStyle {
 
         var body: some View {
             configuration.label
-                .font(Theme.font(17))
+                .font(Theme.font(18))
                 .foregroundStyle(Theme.text)
                 .padding(.horizontal, 12)
                 .frame(height: height)
@@ -175,7 +175,7 @@ struct ToggleRowStyle: ButtonStyle {
 
     func makeBody(configuration: ButtonStyleConfiguration) -> some View {
         configuration.label
-            .font(Theme.font(17))
+            .font(Theme.font(18))
             .foregroundStyle(Theme.text)
             .padding(.horizontal, 12)
             .frame(height: height)
@@ -330,14 +330,15 @@ struct SectionHeader: View {
     let title: String
     @Binding var isExpanded: Bool
     var summary: String? = nil
+    @State private var hovering = false
 
     var body: some View {
         Button {
             isExpanded.toggle()
         } label: {
-            HStack(spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(title)
-                    .font(Theme.font(17, bold: true))
+                    .font(Theme.font(18, bold: true))
                     .foregroundStyle(Theme.text)
                 Spacer(minLength: 8)
                 if !isExpanded, let summary {
@@ -347,16 +348,14 @@ struct SectionHeader: View {
                         .lineLimit(1)
                         .truncationMode(.tail)
                 }
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
+                AppIcon(kind: .chevron, hovered: hovering, expanded: isExpanded)
                     .foregroundStyle(Theme.tertiaryText)
-                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                    .animation(.easeInOut(duration: 0.25), value: isExpanded)
             }
             .padding(.horizontal, 14)
             .frame(height: 52)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .onHover { hovering = $0 }
     }
 }

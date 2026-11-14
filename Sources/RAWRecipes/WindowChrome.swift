@@ -114,7 +114,7 @@ struct TitleBar: View {
             TrafficLights(windowRef: windowRef)
 
             Text("RAW Recipes")
-                .font(Theme.font(17, bold: true))
+                .font(Theme.font(18, bold: true))
                 .foregroundStyle(Theme.text)
                 .allowsHitTesting(false)
 
