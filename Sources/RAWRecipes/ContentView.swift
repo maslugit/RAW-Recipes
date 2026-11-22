@@ -52,6 +52,7 @@ struct ContentView: View {
     @State private var hoverSelection = false
     /// The table under "5 of 130 selected": how many RAW/JPG files and which are imported.
     @State private var showSelectionBreakdown = false
+    @State private var arrowKeyMonitor: Any?
     @AppStorage("importFolderPath") private var importFolderPath = ""
     @AppStorage("writeXMP") private var writeXMP = true
     @AppStorage("writeRRData") private var writeRRData = false
@@ -109,21 +110,19 @@ struct ContentView: View {
                 // Space checks or unchecks the highlighted photos for import.
                 Button("", action: toggleChecksForHighlighted)
                     .keyboardShortcut(.space, modifiers: [])
-                // ← → step through the filmstrip, ⇧← ⇧→ extend the highlight like ⇧-click.
-                Button("") { step(-1, extend: false) }
-                    .keyboardShortcut(.leftArrow, modifiers: [])
-                Button("") { step(1, extend: false) }
-                    .keyboardShortcut(.rightArrow, modifiers: [])
-                Button("") { step(-1, extend: true) }
-                    .keyboardShortcut(.leftArrow, modifiers: .shift)
-                Button("") { step(1, extend: true) }
-                    .keyboardShortcut(.rightArrow, modifiers: .shift)
             }
             .opacity(0)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
         )
-        .onAppear { focusFirstIfNeeded(camera.shots.map(\.id)) }
+        .onAppear {
+            focusFirstIfNeeded(camera.shots.map(\.id))
+            installArrowKeys()
+        }
+        .onDisappear {
+            if let arrowKeyMonitor { NSEvent.removeMonitor(arrowKeyMonitor) }
+            arrowKeyMonitor = nil
+        }
         .onChange(of: camera.shots.map(\.id)) { ids in focusFirstIfNeeded(ids) }
     }
 
@@ -412,6 +411,26 @@ struct ContentView: View {
             highlighted = [id]
             focusedID = id
             anchorID = id
+        }
+    }
+
+    /// ← → and ⇧← ⇧→ for the filmstrip. Read straight from the key event, so ⇧ is only
+    /// used when it is actually held (keyboard shortcuts for arrow keys mixed it up).
+    private func installArrowKeys() {
+        guard arrowKeyMonitor == nil else { return }
+        arrowKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard event.window?.isKeyWindow == true,
+                  !(event.window?.firstResponder is NSText) else { return event }
+            // Arrow keys always carry .function and .numericPad – ignore those.
+            let flags = event.modifierFlags
+                .intersection(.deviceIndependentFlagsMask)
+                .subtracting([.function, .numericPad, .capsLock])
+            guard flags.isEmpty || flags == .shift else { return event }
+            switch event.keyCode {
+            case 123: step(-1, extend: flags == .shift); return nil   // ←
+            case 124: step(1, extend: flags == .shift); return nil    // →
+            default: return event
+            }
         }
     }
 
