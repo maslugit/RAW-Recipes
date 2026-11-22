@@ -104,12 +104,24 @@ struct ContentView: View {
         .preferredColorScheme(.dark)
         .focusedSceneValue(\.selectionActions, SelectionActions(selectAll: selectAll, selectNone: selectNone))
         .background(
-            // Space checks or unchecks the highlighted photos for import.
-            Button("", action: toggleChecksForHighlighted)
-                .keyboardShortcut(.space, modifiers: [])
-                .opacity(0)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
+            // Invisible buttons for the filmstrip's keyboard shortcuts.
+            ZStack {
+                // Space checks or unchecks the highlighted photos for import.
+                Button("", action: toggleChecksForHighlighted)
+                    .keyboardShortcut(.space, modifiers: [])
+                // ← → step through the filmstrip, ⇧← ⇧→ extend the highlight like ⇧-click.
+                Button("") { step(-1, extend: false) }
+                    .keyboardShortcut(.leftArrow, modifiers: [])
+                Button("") { step(1, extend: false) }
+                    .keyboardShortcut(.rightArrow, modifiers: [])
+                Button("") { step(-1, extend: true) }
+                    .keyboardShortcut(.leftArrow, modifiers: .shift)
+                Button("") { step(1, extend: true) }
+                    .keyboardShortcut(.rightArrow, modifiers: .shift)
+            }
+            .opacity(0)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
         )
         .onAppear { focusFirstIfNeeded(camera.shots.map(\.id)) }
         .onChange(of: camera.shots.map(\.id)) { ids in focusFirstIfNeeded(ids) }
@@ -401,6 +413,27 @@ struct ContentView: View {
             focusedID = id
             anchorID = id
         }
+    }
+
+    /// ← / →: show the previous or next photo and highlight only it.
+    /// ⇧← / ⇧→: move the same way, but highlight the range from the anchor (the last
+    /// plain click or step), so the range grows and shrinks like in Finder.
+    private func step(_ delta: Int, extend: Bool) {
+        let ids = camera.shots.map(\.id)
+        guard !ids.isEmpty else { return }
+        let current = focusedID.flatMap { ids.firstIndex(of: $0) }
+        let next = current.map { min(max($0 + delta, 0), ids.count - 1) } ?? (delta > 0 ? 0 : ids.count - 1)
+        let id = ids[next]
+
+        if extend {
+            let anchor = anchorID.flatMap { ids.firstIndex(of: $0) } ?? current ?? next
+            if anchorID == nil { anchorID = ids[anchor] }
+            highlighted = Set(ids[min(anchor, next)...max(anchor, next)])
+        } else {
+            highlighted = [id]
+            anchorID = id
+        }
+        focusedID = id
     }
 
     /// Checks all highlighted photos for import, or unchecks them if they are all checked already.

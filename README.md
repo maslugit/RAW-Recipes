@@ -78,7 +78,8 @@ xattr -dr com.apple.quarantine "/Applications/RAW Recipes.app"
 
 ## Usage
 
-- Click a photo in the filmstrip to preview it. Tick the checkbox to select it for import, or press **⌘A** to select all (**⌥⌘A** deselects).
+- Click a photo in the filmstrip to preview it, or step through the photos with **←** and **→**. **⇧-click** or **⇧←/⇧→** highlights a range, **⌘-click** adds or removes single photos.
+- Tick the checkbox to select a photo for import, or press **Space** to tick all highlighted photos. **⌘A** selects all (**⌥⌘A** deselects).
 - Zoom with the slider, the mouse wheel, a two-finger swipe up/down or a pinch on the trackpad. Drag to move around. Double-click the slider handle to fit the photo again.
 - Under **Import Options**, choose RAW + JPG, RAW only or JPG only, the sidecars you want, and the destination folder.
 - Click **Import** or press **⌘I**.
