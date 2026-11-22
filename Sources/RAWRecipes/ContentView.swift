@@ -49,6 +49,9 @@ struct ContentView: View {
     @State private var hoverImportHeader = false
     @State private var hoverFolder = false
     @State private var hoverImport = false
+    @State private var hoverSelection = false
+    /// The table under "5 of 130 selected": how many RAW/JPG files and which are imported.
+    @State private var showSelectionBreakdown = false
     @AppStorage("importFolderPath") private var importFolderPath = ""
     @AppStorage("writeXMP") private var writeXMP = true
     @AppStorage("writeRRData") private var writeRRData = false
@@ -204,7 +207,27 @@ struct ContentView: View {
     }
 
     private var canImport: Bool {
-        !selection.isEmpty && !importFolderPath.isEmpty && !camera.isBusy
+        importableCount > 0 && !importFolderPath.isEmpty && !camera.isBusy
+    }
+
+    private var selectedShots: [Shot] {
+        camera.shots.filter { selection.contains($0.id) }
+    }
+
+    /// Selected photos that have at least one file matching RAW + JPG / RAW only / JPG only.
+    /// This is what the import button counts, so it never promises photos that are skipped.
+    private var importableCount: Int {
+        selectedShots.filter { $0.files.contains(where: fileTypes.includes) }.count
+    }
+
+    /// Why the import button is disabled even though photos are selected.
+    private var nothingToImportReason: String? {
+        guard !selection.isEmpty, importableCount == 0 else { return nil }
+        switch fileTypes {
+        case .rawOnly: return "None of the selected photos have a RAW file"
+        case .jpegOnly: return "None of the selected photos have a JPG file"
+        case .both: return "None of the selected photos have a file to import"
+        }
     }
 
     /// "Save Lightroom, RapidRAW to" – depending on which sidecars are selected.
@@ -244,10 +267,7 @@ struct ContentView: View {
     /// Always visible: number selected and the import button.
     private var importActions: some View {
         VStack(spacing: 12) {
-            Text("\(selection.count) of \(camera.shots.count) selected")
-                .font(Theme.font(18))
-                .foregroundStyle(Theme.secondaryText)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            selectionSummary
 
             Button(action: startImport) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -257,7 +277,7 @@ struct ContentView: View {
                     } else {
                         AppIcon(kind: .importArrow, hovered: hoverImport && canImport)
                     }
-                    Text(camera.isBusy ? "Importing…" : "Import \(selection.count)")
+                    Text(camera.isBusy ? "Importing…" : "Import \(importableCount)")
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -265,7 +285,64 @@ struct ContentView: View {
             .disabled(!canImport)
             .onHover { hoverImport = $0 }
             .keyboardShortcut("i", modifiers: .command)
-            .help(importFolderPath.isEmpty ? "Choose a folder under Import Options first" : "Import selected photos (⌘I)")
+            .help(importFolderPath.isEmpty ? "Choose a folder under Import Options first"
+                  : nothingToImportReason ?? "Import selected photos (⌘I)")
+        }
+    }
+
+    /// "5 of 130 selected" with a chevron that shows the files per type and whether they are imported.
+    private var selectionSummary: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.25)) { showSelectionBreakdown.toggle() }
+            } label: {
+                HStack(alignment: .center, spacing: 8) {
+                    Text("\(selection.count) of \(camera.shots.count) selected")
+                        .font(Theme.font(18))
+                        .foregroundStyle(Theme.secondaryText)
+                    Spacer(minLength: 8)
+                    AppIcon(kind: .chevron, hovered: hoverSelection && !selection.isEmpty,
+                            expanded: showSelectionBreakdown && !selection.isEmpty)
+                        .foregroundStyle(Theme.tertiaryText)
+                        .opacity(selection.isEmpty ? 0.35 : 1)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(selection.isEmpty)
+            .onHover { hoverSelection = $0 }
+            .help(showSelectionBreakdown ? "Hide file types" : "Show which files will be imported")
+
+            if showSelectionBreakdown && !selection.isEmpty {
+                VStack(spacing: 6) {
+                    breakdownRow("RAW", count: selectedShots.filter { $0.raw != nil }.count,
+                                 included: fileTypes != .jpegOnly)
+                    breakdownRow("JPG", count: selectedShots.filter { $0.jpeg != nil }.count,
+                                 included: fileTypes != .rawOnly)
+                    breakdownRow("Other", count: selectedShots.reduce(0) { $0 + $1.others.count },
+                                 included: fileTypes == .both)
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .clipped()
+    }
+
+    /// "3 × JPG" and "Included" or "Skipped" – written out, so it is not mixed up with the chevron.
+    @ViewBuilder
+    private func breakdownRow(_ label: String, count: Int, included: Bool) -> some View {
+        if count > 0 {
+            HStack(spacing: 8) {
+                Text("\(count) × \(label)")
+                    .font(Theme.font(15))
+                    .foregroundStyle(included ? Theme.secondaryText : Theme.tertiaryText)
+                Spacer(minLength: 8)
+                Text(included ? "Included" : "Skipped")
+                    .font(.system(size: 13, design: .monospaced))   // same as .xmp / .rrdata in Import Options
+                    .foregroundStyle(included ? Theme.secondaryText : Theme.tertiaryText)
+            }
+            .help(included ? "\(count) \(label) will be imported"
+                           : "\(count) \(label) will be skipped (\(fileTypes.title) is selected)")
         }
     }
 
