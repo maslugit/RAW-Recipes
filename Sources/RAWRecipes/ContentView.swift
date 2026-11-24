@@ -301,7 +301,24 @@ struct ContentView: View {
         }
     }
 
+    /// Photos with a RAW and/or JPG file. Shots with only other files (e.g. movies) are left out
+    /// when counting missing files, since they are not expected to have either.
+    private var selectedPhotoShots: [Shot] {
+        selectedShots.filter { $0.raw != nil || $0.jpeg != nil }
+    }
+
+    /// Files the chosen file types ask for that the selected photos don't have:
+    /// RAW + JPG with four RAW-only photos gives 4 missing JPG files.
+    private var missingRAWCount: Int {
+        fileTypes == .jpegOnly ? 0 : selectedPhotoShots.filter { $0.raw == nil }.count
+    }
+    private var missingJPGCount: Int {
+        fileTypes == .rawOnly ? 0 : selectedPhotoShots.filter { $0.jpeg == nil }.count
+    }
+    private var missingCount: Int { missingRAWCount + missingJPGCount }
+
     /// "5 of 130 selected" with a chevron that shows the files per type and whether they are imported.
+    /// While collapsed, a badge after "selected" counts the files that will be missing from the import.
     private var selectionSummary: some View {
         VStack(alignment: .leading, spacing: 10) {
             Button {
@@ -311,12 +328,20 @@ struct ContentView: View {
                     Text("\(selection.count) of \(camera.shots.count) selected")
                         .font(Theme.font(18))
                         .foregroundStyle(Theme.secondaryText)
+                    if !showSelectionBreakdown && missingCount > 0 {
+                        CountBadge(count: missingCount)
+                            .transition(.scale(scale: 0.6).combined(with: .opacity))
+                            .help(missingCount == 1
+                                  ? "1 file you chose to import is not on the card – expand to see which"
+                                  : "\(missingCount) files you chose to import are not on the card – expand to see which")
+                    }
                     Spacer(minLength: 8)
                     AppIcon(kind: .chevron, hovered: hoverSelection && !selection.isEmpty,
                             expanded: showSelectionBreakdown && !selection.isEmpty)
                         .foregroundStyle(Theme.tertiaryText)
                         .opacity(selection.isEmpty ? 0.35 : 1)
                 }
+                .animation(.spring(response: 0.25, dampingFraction: 0.7), value: missingCount)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -326,12 +351,14 @@ struct ContentView: View {
 
             if showSelectionBreakdown && !selection.isEmpty {
                 VStack(spacing: 6) {
-                    breakdownRow("RAW", count: selectedShots.filter { $0.raw != nil }.count,
-                                 included: fileTypes != .jpegOnly)
-                    breakdownRow("JPG", count: selectedShots.filter { $0.jpeg != nil }.count,
-                                 included: fileTypes != .rawOnly)
+                    let raw = selectedShots.filter { $0.raw != nil }.count
+                    let jpg = selectedShots.filter { $0.jpeg != nil }.count
+                    breakdownRow("RAW", count: raw, status: fileTypes != .jpegOnly ? .included : .skipped)
+                    breakdownRow("RAW", count: missingRAWCount, status: .missing)
+                    breakdownRow("JPG", count: jpg, status: fileTypes != .rawOnly ? .included : .skipped)
+                    breakdownRow("JPG", count: missingJPGCount, status: .missing)
                     breakdownRow("Other", count: selectedShots.reduce(0) { $0 + $1.others.count },
-                                 included: fileTypes == .both)
+                                 status: fileTypes == .both ? .included : .skipped)
                 }
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
@@ -339,21 +366,40 @@ struct ContentView: View {
         .clipped()
     }
 
-    /// "3 × JPG" and "Included" or "Skipped" – written out, so it is not mixed up with the chevron.
+    private enum BreakdownStatus {
+        case included, skipped, missing
+
+        var title: String {
+            switch self {
+            case .included: return "Included"
+            case .skipped: return "Skipped"
+            case .missing: return "Missing"
+            }
+        }
+    }
+
+    /// "3 × JPG" and "Included", "Skipped" or "Missing" – written out, so it is not mixed up
+    /// with the chevron. Skipped: on the card but not chosen. Missing: chosen but not on the card.
     @ViewBuilder
-    private func breakdownRow(_ label: String, count: Int, included: Bool) -> some View {
+    private func breakdownRow(_ label: String, count: Int, status: BreakdownStatus) -> some View {
         if count > 0 {
+            let included = status == .included
             HStack(spacing: 8) {
                 Text("\(count) × \(label)")
                     .font(Theme.font(15))
                     .foregroundStyle(included ? Theme.secondaryText : Theme.tertiaryText)
                 Spacer(minLength: 8)
-                Text(included ? "Included" : "Skipped")
+                Text(status.title)
                     .font(.system(size: 13, design: .monospaced))   // same as .xmp / .rrdata in Import Options
                     .foregroundStyle(included ? Theme.secondaryText : Theme.tertiaryText)
             }
-            .help(included ? "\(count) \(label) will be imported"
-                           : "\(count) \(label) will be skipped (\(fileTypes.title) is selected)")
+            .help({
+                switch status {
+                case .included: return "\(count) \(label) will be imported"
+                case .skipped: return "\(count) \(label) will be skipped (\(fileTypes.title) is selected)"
+                case .missing: return "\(count) of the selected photos have no \(label) file on the card"
+                }
+            }())
         }
     }
 
@@ -523,6 +569,21 @@ struct ContentView: View {
                                      writeXMP: writeXMP, writeRRData: writeRRData)
             selection.removeAll()
         }
+    }
+}
+
+/// Small count badge, e.g. the number of missing files after "5 of 130 selected".
+struct CountBadge: View {
+    let count: Int
+
+    var body: some View {
+        Text("\(count)")
+            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+            .foregroundStyle(Theme.background)
+            .padding(.horizontal, 6)
+            .frame(minWidth: 20, minHeight: 18)
+            .background(Capsule().fill(Theme.secondaryText))
+            .fixedSize()
     }
 }
 
