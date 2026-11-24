@@ -101,7 +101,7 @@ struct ContentView: View {
         .background(Theme.background.ignoresSafeArea())
         .background(WindowConfigurator(ref: windowRef))
         .foregroundStyle(Theme.text)
-        .font(Theme.font(18))
+        .font(Theme.TextStyle.body)
         .preferredColorScheme(.dark)
         .focusedSceneValue(\.selectionActions, SelectionActions(selectAll: selectAll, selectNone: selectNone))
         .background(
@@ -145,7 +145,7 @@ struct ContentView: View {
         } else {
             SidebarSection(title: "Camera Settings", isExpanded: $showSettings) {
                 Text("No photo selected.")
-                    .font(Theme.font(16))
+                    .font(Theme.TextStyle.secondary)
                     .foregroundStyle(Theme.tertiaryText)
             }
         }
@@ -176,11 +176,11 @@ struct ContentView: View {
         HStack(alignment: .center, spacing: 8) {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Import Options")
-                    .font(Theme.font(18, bold: true))
+                    .font(Theme.TextStyle.heading)
                     .foregroundStyle(Theme.text)
 
                 Text(saveLabel)
-                    .font(Theme.font(15))
+                    .font(Theme.TextStyle.label)
                     .foregroundStyle(Theme.secondaryText)
                     .lineLimit(1)
 
@@ -194,7 +194,7 @@ struct ContentView: View {
                                 .truncationMode(.middle)
                         }
                     }
-                    .font(Theme.font(15))
+                    .font(Theme.TextStyle.label)
                     .foregroundStyle(Theme.text)
                     .contentShape(Rectangle())
                 }
@@ -326,7 +326,7 @@ struct ContentView: View {
             } label: {
                 HStack(alignment: .center, spacing: 8) {
                     Text("\(selection.count) of \(camera.shots.count) selected")
-                        .font(Theme.font(18))
+                        .font(Theme.TextStyle.body)
                         .foregroundStyle(Theme.secondaryText)
                     if !showSelectionBreakdown && missingCount > 0 {
                         CountBadge(count: missingCount)
@@ -386,11 +386,11 @@ struct ContentView: View {
             let included = status == .included
             HStack(spacing: 8) {
                 Text("\(count) × \(label)")
-                    .font(Theme.font(15))
+                    .font(Theme.TextStyle.label)
                     .foregroundStyle(included ? Theme.secondaryText : Theme.tertiaryText)
                 Spacer(minLength: 8)
                 Text(status.title)
-                    .font(.system(size: 13, design: .monospaced))   // same as .xmp / .rrdata in Import Options
+                    .font(Theme.TextStyle.mono)   // same as .xmp / .rrdata in Import Options
                     .foregroundStyle(included ? Theme.secondaryText : Theme.tertiaryText)
             }
             .help({
@@ -412,7 +412,7 @@ struct ContentView: View {
             Text(camera.camera == nil
                  ? "Connect your camera in USB CARD READER mode."
                  : "Pick a photo in the filmstrip below.")
-                .font(Theme.font(18))
+                .font(Theme.TextStyle.body)
                 .foregroundStyle(Theme.secondaryText)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -578,12 +578,12 @@ struct CountBadge: View {
 
     var body: some View {
         Text("\(count)")
-            .font(.system(size: 11, weight: .regular, design: .monospaced))
-            .foregroundStyle(.white)
+            .font(Theme.TextStyle.badge)
+            .foregroundStyle(Theme.onDanger)
             .padding(.leading, 5)
             .padding(.trailing, 7)
             .frame(minWidth: 20, minHeight: 18)
-            .background(Capsule().fill(Color(red: 209/255, green: 48/255, blue: 48/255)))   // #D13030
+            .background(Capsule().fill(Theme.danger))
             .fixedSize()
     }
 }
@@ -603,11 +603,11 @@ struct ShotSettingsSection: View {
                     ForEach(rows) { row in
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
                             Text(row.label)
-                                .font(Theme.font(16))
+                                .font(Theme.TextStyle.secondary)
                                 .foregroundStyle(Theme.tertiaryText)
                             Spacer(minLength: 8)
                             Text(row.value)
-                                .font(Theme.font(18))
+                                .font(Theme.TextStyle.body)
                                 .foregroundStyle(Theme.text)
                                 .multilineTextAlignment(.trailing)
                         }
@@ -615,7 +615,7 @@ struct ShotSettingsSection: View {
                 }
             } else {
                 Text(shot.preview == nil ? "Reading settings…" : "No camera settings found.")
-                    .font(Theme.font(16))
+                    .font(Theme.TextStyle.secondary)
                     .foregroundStyle(Theme.tertiaryText)
             }
         }
@@ -638,7 +638,7 @@ struct Filmstrip: View {
     var body: some View {
         if camera.shots.isEmpty {
             Text(camera.camera == nil ? "No camera connected" : "No photos on the card")
-                .font(Theme.font(18))
+                .font(Theme.TextStyle.body)
                 .foregroundStyle(Theme.tertiaryText)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
@@ -747,7 +747,7 @@ struct ShotCell: View {
     /// when the sharper preview replaces it, the new image fades in.
     private var card: some View {
         ZStack {
-            Color.black
+            Theme.imageBackground
             if let thumb = shot.thumbnail {
                 Image(decorative: thumb, scale: 1)
                     .resizable()
@@ -762,7 +762,7 @@ struct ShotCell: View {
 
     private var fileName: some View {
         Text(shot.displayName)
-            .font(.system(size: 14))
+            .font(Theme.TextStyle.fileName)
             .foregroundStyle(isFocused ? Theme.text : Theme.secondaryText)
     }
 }
@@ -776,8 +776,8 @@ struct FileTypeTag: View {
 
     private let stackOffset: CGFloat = 3
     /// Solid dark gray with a thin light gray stroke – the same for both tags in a stack.
-    private let fill = Color(white: 0.16)
-    private let stroke = Color(white: 0.45)
+    private let fill = Theme.tagFill
+    private let stroke = Theme.tagStroke
 
     var body: some View {
         if shot.raw != nil && shot.jpeg != nil {
@@ -801,9 +801,9 @@ struct FileTypeTag: View {
     private func tag(_ text: String, showsText: Bool = true) -> some View {
         let shape = RoundedRectangle(cornerRadius: 3, style: .continuous)
         return Text(text)
-            .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
+            .font(Theme.TextStyle.tag)
             .tracking(0.6)
-            .foregroundStyle(showsText ? Color.white : Color.clear)
+            .foregroundStyle(showsText ? Theme.text : Color.clear)
             .padding(.horizontal, 4)
             .padding(.vertical, 2)
             .background(shape.fill(fill))
@@ -843,14 +843,14 @@ struct DetailView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
                         Text(shot.displayName)
-                            .font(Theme.font(19, bold: true))
+                            .font(Theme.TextStyle.title)
                         Text(shot.kindLabel)
-                            .font(Theme.font(16))
+                            .font(Theme.TextStyle.secondary)
                             .foregroundStyle(Theme.secondaryText)
                     }
                     if let date = shot.date {
                         Text(Self.dateFormatter.string(from: date))
-                            .font(Theme.font(16))
+                            .font(Theme.TextStyle.secondary)
                             .foregroundStyle(Theme.secondaryText)
                             .help("When the photo was taken")
                     }
@@ -1117,13 +1117,13 @@ struct ZoomControl: View {
     var body: some View {
         HStack(spacing: 10) {
             Text("Zoom")
-                .font(Theme.font(16))
+                .font(Theme.TextStyle.secondary)
                 .foregroundStyle(Theme.secondaryText)
 
             slider
 
             Text("\(Int((zoom * 100).rounded())) %")
-                .font(Theme.font(16))
+                .font(Theme.TextStyle.secondary)
                 .monospacedDigit()
                 .foregroundStyle(Theme.text)
                 .frame(width: 60, alignment: .trailing)

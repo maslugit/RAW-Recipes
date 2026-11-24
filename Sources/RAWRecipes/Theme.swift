@@ -2,9 +2,14 @@ import SwiftUI
 import AppKit
 import CoreText
 
-// MARK: - Colors and metrics (dark mode)
+// MARK: - Design tokens
+//
+// Every color, text style and metric the app uses lives here. Views use the token names
+// (Theme.secondaryText, Theme.TextStyle.label …), never raw values, so a change here
+// changes it everywhere. Hex values match the design file.
 
 enum Theme {
+    // MARK: Colors
     /// Window background – dark, but not pure black.
     static let nsBackground = NSColor(white: 0.07, alpha: 1)
     static let background = Color(nsColor: nsBackground)
@@ -22,6 +27,17 @@ enum Theme {
     static let tertiaryText = Color(white: 0.52)
 
     static let green = Color(red: 0.20, green: 0.78, blue: 0.35)
+    /// Warnings, e.g. the badge for files missing from an import.
+    static let danger = Color(hex: "#D13030")
+    static let onDanger = Color.white
+
+    /// Behind photos and thumbnails (letterboxing).
+    static let imageBackground = Color.black
+    /// The RAW / JPG tags in the filmstrip.
+    static let tagFill = Color(white: 0.16)
+    static let tagStroke = Color(white: 0.45)
+
+    // MARK: Metrics
 
     static let gap: CGFloat = 8
     static let corner: CGFloat = 16        // stacks
@@ -62,6 +78,29 @@ enum AppFont {
 }
 
 extension Theme {
+    /// Text styles. Averia Serif Libre for text, the system monospace for file names and values.
+    enum TextStyle {
+        /// The photo name above the preview.
+        static var title: Font { Theme.font(19, bold: true) }
+        /// Section headers and the window title.
+        static var heading: Font { Theme.font(18, bold: true) }
+        /// Buttons, rows, values – the default size.
+        static var body: Font { Theme.font(18) }
+        /// Summaries, setting names, dates.
+        static var secondary: Font { Theme.font(16) }
+        /// Smaller text, e.g. "Save Lightroom to" and the breakdown rows.
+        static var label: Font { Theme.font(15) }
+        /// File extensions and statuses: ".xmp", "Included".
+        static var mono: Font { .system(size: 13, design: .monospaced) }
+        /// File names under the thumbnails.
+        static var fileName: Font { .system(size: 14) }
+        /// The count badge.
+        static var badge: Font { .system(size: 11, weight: .regular, design: .monospaced) }
+        /// RAW / JPG tags on the thumbnails.
+        static var tag: Font { .system(size: 9.5, weight: .semibold, design: .monospaced) }
+    }
+
+    /// Averia at any size. Prefer a TextStyle; use this only for one-off sizes.
     static func font(_ size: CGFloat, bold: Bool = false) -> Font {
         if AppFont.isAvailable {
             return .custom(bold ? AppFont.bold : AppFont.regular, size: size)
@@ -94,7 +133,7 @@ struct DarkButtonStyle: ButtonStyle {
 
         var body: some View {
             configuration.label
-                .font(Theme.font(18))
+                .font(Theme.TextStyle.body)
                 .foregroundStyle(Theme.text)
                 .padding(.horizontal, 12)
                 .frame(height: height)
@@ -157,7 +196,7 @@ struct SidecarToggle: View {
                 if fullWidth || fileExtension != nil { Spacer(minLength: 8) }
                 if let fileExtension {
                     Text(fileExtension)
-                        .font(.system(size: 13, design: .monospaced))   // same as the file type in the filmstrip
+                        .font(Theme.TextStyle.mono)   // same as the file type in the filmstrip
                         .foregroundStyle(Theme.secondaryText)
                 }
             }
@@ -175,7 +214,7 @@ struct ToggleRowStyle: ButtonStyle {
 
     func makeBody(configuration: ButtonStyleConfiguration) -> some View {
         configuration.label
-            .font(Theme.font(18))
+            .font(Theme.TextStyle.body)
             .foregroundStyle(Theme.text)
             .padding(.horizontal, 12)
             .frame(height: height)
@@ -222,7 +261,7 @@ struct SlidingPicker<Value: Hashable>: View {
                             selection = options[i].value
                         } label: {
                             Text(options[i].title)
-                                .font(Theme.font(16))
+                                .font(Theme.TextStyle.secondary)
                                 .foregroundStyle(Theme.text)
                                 .lineLimit(1)
                                 .frame(width: segment, height: geo.size.height)
@@ -338,12 +377,12 @@ struct SectionHeader: View {
         } label: {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(title)
-                    .font(Theme.font(18, bold: true))
+                    .font(Theme.TextStyle.heading)
                     .foregroundStyle(Theme.text)
                 Spacer(minLength: 8)
                 if !isExpanded, let summary {
                     Text(summary)
-                        .font(Theme.font(16))
+                        .font(Theme.TextStyle.secondary)
                         .foregroundStyle(Theme.secondaryText)
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -357,5 +396,18 @@ struct SectionHeader: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
+    }
+}
+
+// MARK: - Hex colors
+
+extension Color {
+    /// `Color(hex: "#D13030")` or `Color(hex: "D13030")`, as written in the design file.
+    init(hex: String) {
+        let digits = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+        let value = UInt64(digits, radix: 16) ?? 0
+        self.init(red: Double((value >> 16) & 0xFF) / 255,
+                  green: Double((value >> 8) & 0xFF) / 255,
+                  blue: Double(value & 0xFF) / 255)
     }
 }

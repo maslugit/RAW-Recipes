@@ -114,12 +114,12 @@ struct TitleBar: View {
             TrafficLights(windowRef: windowRef)
 
             Text("RAW Recipes")
-                .font(Theme.font(18, bold: true))
+                .font(Theme.TextStyle.heading)
                 .foregroundStyle(Theme.text)
                 .allowsHitTesting(false)
 
             Text(status)
-                .font(Theme.font(16))
+                .font(Theme.TextStyle.secondary)
                 .foregroundStyle(Theme.secondaryText)
                 .lineLimit(1)
                 .truncationMode(.middle)
