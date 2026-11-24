@@ -578,12 +578,12 @@ struct CountBadge: View {
 
     var body: some View {
         Text("\(count)")
-            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+            .font(.system(size: 11, weight: .regular, design: .monospaced))
             .foregroundStyle(.white)
-            .padding(.horizontal, 6)
+            .padding(.leading, 5)
+            .padding(.trailing, 7)
             .frame(minWidth: 20, minHeight: 18)
-            .background(Capsule().fill(Color(red: 1, green: 0, blue: 0)))   // #ff0000
-            .overlay(Capsule().strokeBorder(.white, lineWidth: 1))
+            .background(Capsule().fill(Color(red: 209/255, green: 48/255, blue: 48/255)))   // #D13030
             .fixedSize()
     }
 }
